@@ -1,23 +1,19 @@
-use std::{ops::{Range, RangeInclusive}, cmp::min, path::Path};
-
-use axum::{headers::{AcceptRanges, ContentRange, ContentLength, ContentType, HeaderMapExt}, response::{Response, IntoResponse}};
-use hyper::{Request, Body, StatusCode, HeaderMap};
-use mime::Mime;
-use tokio::{fs::{File, metadata}, io::AsyncReadExt};
+use axum::{ http, response::IntoResponse, body::Bytes };
+use futures::StreamExt;
+use http::{Response, StatusCode};
+use hyper::{Body, Request, HeaderMap};
 use tokio_util::codec::{FramedRead, BytesCodec};
+use std::{fs::metadata, io::{SeekFrom, Error}, path::Path, pin::Pin, convert::Infallible };
+use tokio::{
+    fs::File,
+    io::{AsyncRead, AsyncReadExt, AsyncSeekExt},
+};
+
 use crate::error::error::ServerError;
 
 const READ_BYTES: u64 = 10_u64.pow(6);
 
-#[derive(Debug)]
-pub struct Header {
-    content_range: ContentRange,
-    accept_ranges: AcceptRanges,
-    content_length: ContentLength,
-    content_type: ContentType,
-}
-
-pub async fn range_handler(req: Request<Body>) -> Option<Range<u64>> {
+async fn range_handler(req: Request<Body>) -> Option<std::ops::Range<u64>> {
     let range = req.headers()
         .get("Range")
         .and_then(|range| range.to_str().ok())
@@ -33,72 +29,57 @@ pub async fn range_handler(req: Request<Body>) -> Option<Range<u64>> {
     range
 }
 
-impl Header {
-    pub async fn new(range: RangeInclusive<u64>, complete_length: u64, content_length: u64) -> Self {
-        Self {
-            content_range: ContentRange::bytes(range, complete_length).expect("Cannot create Content-Range "),
-            accept_ranges: AcceptRanges::bytes(),
-            content_length: ContentLength(content_length),
-            content_type: ContentType::from("video/mp4".parse::<Mime>().unwrap()),
+async fn response_header(
+    path: &Path,
+    range: std::ops::Range<u64>,
+) -> Result<(StatusCode, HeaderMap, Pin<Box<dyn AsyncRead + Send>>), ServerError> {
+    let f_size = metadata(path)?.len();
+    let start = range.start;
+    let end = std::cmp::min(start + READ_BYTES, f_size - 1);
+    let content_length = end - start + 1;
+
+    let mut headers = HeaderMap::new();
+
+    headers.insert("Content-Range", format!("bytes {}-{}/{}", start, end, f_size).parse().unwrap());
+    headers.insert("Accept-Ranges", "bytes".parse().unwrap());
+    headers.insert("Content-Length", content_length.to_string().parse().unwrap());
+    headers.insert("Content-Type", "video/mp4".parse().unwrap());
+
+    let mut file = File::open(path).await?;
+    file.seek(SeekFrom::Start(start)).await?;
+    let file = file.take(content_length);
+
+    Ok((StatusCode::PARTIAL_CONTENT, headers, Box::pin(file)))
+}
+
+pub async fn header_handler(path: &Path, req: Request<Body>) -> Result<impl IntoResponse, Infallible> {
+    let range = match range_handler(req).await {
+        Some(range) => range,
+        None => {
+            return Ok(StatusCode::BAD_REQUEST.into_response());
         }
-    }
-
-    pub async fn response_header(
-        path: &Path,
-        range: Range<u64>,
-    ) -> Result<(StatusCode, HeaderMap, File), ServerError> {
-        let f_size = metadata(path).await?.len();
-        let start = range.start;
-        let end = min(start + READ_BYTES, f_size - 1);
-        let content_length = end - start + 1;
-
-        let is_entire_video = start == 0 && end == f_size - 1;
-
-        if is_entire_video {
-            let content_length = ContentLength(f_size);
-            let content_type = ContentType::from("video/mp4".parse::<Mime>().unwrap());
-            let mut headers = HeaderMap::new();
-            headers.typed_insert(content_length);
-            headers.typed_insert(content_type);
-            let file = File::open(path).await?;
-            return Ok((StatusCode::OK, headers, file));
+    };
+    match response_header(path, range).await {
+        Ok((status, headers, body)) => {
+            let content_length = headers.get("Content-Length").unwrap().to_owned();
+            let content_type = headers.get("Content-Type").unwrap().to_owned();
+            let content_range = headers.get("Content-Range").unwrap().to_owned();
+            let accept_ranges = headers.get("Accept-Ranges").unwrap().to_owned();
+            let stream = FramedRead::new(body, BytesCodec::new())
+            .map(|item| Ok::<Bytes, Error>(item.unwrap().freeze()));
+            let resp: Response<Body> = Response::builder()
+                .status(status)
+                .header("Content-Range", content_range)
+                .header("Accept-Ranges", accept_ranges)
+                .header("Content-Length", content_length)
+                .header("Content-Type", content_type)
+                .body(Body::wrap_stream(stream).into())
+                .unwrap();
+            Ok(resp.into_response())
         }
-
-        let header = Header::new(start..=end, f_size, content_length).await;
-        dbg!(&header);
-        let mut headers = HeaderMap::new();
-
-        headers.typed_insert(header.content_range);
-        headers.typed_insert(header.accept_ranges);
-        headers.typed_insert(header.content_length);
-        headers.typed_insert(header.content_type);
-        
-        let file = File::open(path).await?;
-        let file = file.take(content_length);
-        let file = file.into_inner();
-
-        Ok((StatusCode::PARTIAL_CONTENT, headers, file))
-    }
-
-    pub async fn header_handler(req: Request<Body>, path: &Path) -> impl IntoResponse {
-        let range = range_handler(req).await.expect("Cannot get Range");
-
-        match Header::response_header(path, range).await {
-            Ok((status, headers, body)) => {
-                let file_stream = FramedRead::new(body, BytesCodec::new());
-                let body = Body::wrap_stream(file_stream);
-                let resp: Response<Body> = Response::builder()
-                    .status(status)
-                    .header("Content-Range", headers.get("Content-Range").expect("Cannot get Content-Range"))
-                    .header("Accept-Ranges", headers.get("Accept-Ranges").expect("Cannot get Accept-Ranges"))
-                    .header("Content-Length", headers.get("Content-Length").expect("Cannot get Content-Length"))
-                    .header("Content-Type", headers.get("Content-Type").expect("Cannot get Content-Type"))
-                    .body(body)
-                    .unwrap();
-                dbg!(&resp);
-                resp.into_response()
-            }
-            Err(_) => StatusCode::RANGE_NOT_SATISFIABLE.into_response(), 
+        Err(e) => {
+            dbg!(&e);
+            Ok(StatusCode::RANGE_NOT_SATISFIABLE.into_response())
         }
     }
 }

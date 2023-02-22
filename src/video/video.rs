@@ -8,7 +8,8 @@ use axum::{
 };
 use hyper::{Body, Request};
 use serde::{Deserialize, Serialize};
-use super::header::{Header};
+
+use super::header::header_handler;
 
 #[derive(Serialize, Deserialize)]
 pub struct VideoData {
@@ -26,5 +27,5 @@ pub async fn video_handler(Query(id): Query<VideoData>, req: Request<Body>) -> i
     let resource_path = format!("./src/resources/{}-{}.mp4", id.season, id.episode);
     let file_path = Path::new(&resource_path);
 
-    return Header::header_handler(req, file_path).await;
+    return header_handler(file_path, req).await;
 }
