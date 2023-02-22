@@ -11,7 +11,7 @@ use tokio::{
 
 use crate::error::error::ServerError;
 
-const READ_BYTES: u64 = 10_u64.pow(6);
+const READ_BYTES: u64 = 1024 * 1024;
 
 async fn range_handler(req: Request<Body>) -> Option<std::ops::Range<u64>> {
     let range = req.headers()
@@ -24,7 +24,6 @@ async fn range_handler(req: Request<Body>) -> Option<std::ops::Range<u64>> {
             let end = parts.next().and_then(|s| s.parse().ok()).unwrap_or(std::u64::MAX);
             Some(start..end)
         });
-
     dbg!(&range);
     range
 }
@@ -40,10 +39,17 @@ async fn response_header(
 
     let mut headers = HeaderMap::new();
 
-    headers.insert("Content-Range", format!("bytes {}-{}/{}", start, end, f_size).parse().unwrap());
     headers.insert("Accept-Ranges", "bytes".parse().unwrap());
-    headers.insert("Content-Length", content_length.to_string().parse().unwrap());
     headers.insert("Content-Type", "video/mp4".parse().unwrap());
+
+    if content_length == f_size {
+        let file = File::open(path).await?;
+        headers.insert("Content-Length", f_size.to_string().parse().unwrap());
+        return Ok((StatusCode::OK, headers, Box::pin(file)));
+    }
+
+    headers.insert("Content-Range", format!("bytes {}-{}/{}", start, end, f_size).parse().unwrap());
+    headers.insert("Content-Length", content_length.to_string().parse().unwrap());
 
     let mut file = File::open(path).await?;
     file.seek(SeekFrom::Start(start)).await?;
@@ -51,6 +57,7 @@ async fn response_header(
 
     Ok((StatusCode::PARTIAL_CONTENT, headers, Box::pin(file)))
 }
+
 
 pub async fn header_handler(path: &Path, req: Request<Body>) -> Result<impl IntoResponse, Infallible> {
     let range = match range_handler(req).await {
