@@ -5,14 +5,14 @@ use serde::{Serialize, Deserialize};
 use tokio::{fs, io};
 use crate::video::video::VideoData;
 
-const PATH: &str = "/src/resources";
+const PATH: &str = "./src/resources";
 
 #[derive(Serialize, Deserialize)]
-struct VideoList<'list> {
-    list: Vec<VideoData<'list>>
+pub struct VideoList {
+    list: Vec<VideoData>
 }
 
-impl<'a> VideoList<'a> {
+impl VideoList {
     fn new() -> Self {
         Self { 
             list: Vec::new()
@@ -24,8 +24,7 @@ impl<'a> VideoList<'a> {
     }
 }
 
-
-pub async fn video_list_handler<'a>() -> Result<Json<VideoList<'a>>, io::Error> {
+pub async fn video_list_handler() -> Result<Json<VideoList>, io::Error> {
     let mut entries = fs::read_dir(PATH).await?;
     let mut video_list = VideoList::new();
 
@@ -35,15 +34,13 @@ pub async fn video_list_handler<'a>() -> Result<Json<VideoList<'a>>, io::Error> 
         let f_name = f_name.to_str().unwrap();
         
         let data: Vec<&str> = f_name.split('-').collect();
-        
         video_list.append(data[0], data[1]);
-
     }
 
     Ok(Json(video_list))
 }
 
-pub async fn handler<'a>() -> Result<impl IntoResponse, Infallible> {
+pub async fn get_list_handler<'a>() -> Result<impl IntoResponse, Infallible> {
     let get_video_list = video_list_handler().await;
 
     match get_video_list {
@@ -52,7 +49,8 @@ pub async fn handler<'a>() -> Result<impl IntoResponse, Infallible> {
             let resp: Response<Body> = Response::new(json_str.into());
             Ok(resp.into_response())
         },
-        Err(_) => {
+        Err(e) => {
+            dbg!(&e);
             Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response())
         }
     }

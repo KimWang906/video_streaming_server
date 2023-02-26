@@ -1,3 +1,4 @@
 /target
 /src/resources
+/src/others
 *.env
