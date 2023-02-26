@@ -4,6 +4,7 @@ pub mod database;
 pub mod error;
 pub mod video;
 pub mod routers;
+pub mod list;
 
 pub async fn run_service() -> () {
     let app = route().await;

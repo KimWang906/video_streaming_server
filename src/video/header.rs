@@ -1,7 +1,7 @@
 use axum::{ http, response::IntoResponse, body::Bytes };
 use futures::StreamExt;
 use http::{Response, StatusCode};
-use hyper::{Body, Request, HeaderMap};
+use hyper::{Request, Body, HeaderMap};
 use tokio_util::codec::{FramedRead, BytesCodec};
 use std::{fs::metadata, io::{SeekFrom, Error}, path::Path, pin::Pin, convert::Infallible };
 use tokio::{
@@ -24,12 +24,11 @@ async fn range_handler(req: Request<Body>) -> Option<std::ops::Range<u64>> {
             let end = parts.next().and_then(|s| s.parse().ok()).unwrap_or(std::u64::MAX);
             Some(start..end)
         });
-    dbg!(&range);
     range
 }
 
-async fn response_header(
-    path: &Path,
+async fn response_header<'a>(
+    path: &'a Path,
     range: std::ops::Range<u64>,
 ) -> Result<(StatusCode, HeaderMap, Pin<Box<dyn AsyncRead + Send>>), ServerError> {
     let f_size = metadata(path)?.len();
@@ -58,8 +57,7 @@ async fn response_header(
     Ok((StatusCode::PARTIAL_CONTENT, headers, Box::pin(file)))
 }
 
-
-pub async fn header_handler(path: &Path, req: Request<Body>) -> Result<impl IntoResponse, Infallible> {
+pub async fn header_handler<'a>(path: &'a Path, req: Request<Body>) -> Result<impl IntoResponse, Infallible> {
     let range = match range_handler(req).await {
         Some(range) => range,
         None => {
