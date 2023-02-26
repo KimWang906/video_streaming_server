@@ -34,7 +34,13 @@ pub async fn video_list_handler() -> Result<Json<VideoList>, io::Error> {
         let f_name = f_name.to_str().unwrap();
         
         let data: Vec<&str> = f_name.split('-').collect();
-        video_list.append(data[0], data[1]);
+
+        let episode = data[1]
+            .replace(".mp4", "")
+            .replace(".mkv", "")
+            .replace(".m4v", "");
+
+        video_list.append(data[0], &episode);
     }
 
     Ok(Json(video_list))
