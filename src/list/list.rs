@@ -5,7 +5,7 @@ use serde::{Serialize, Deserialize};
 use tokio::{fs, io};
 use crate::video::video::VideoData;
 
-const PATH: &str = "./src/resources";
+pub const PATH: &str = "./src/resources";
 
 #[derive(Serialize, Deserialize)]
 pub struct VideoList {
@@ -13,13 +13,13 @@ pub struct VideoList {
 }
 
 impl VideoList {
-    fn new() -> Self {
-        Self { 
+    pub fn new() -> Self {
+        Self {
             list: Vec::new()
         }
     }
 
-    fn append<'video_method>(&mut self, season: &'video_method str, episode: &'video_method str) {
+    pub fn append<'video_method>(&mut self, season: &'video_method str, episode: &'video_method str) {
         self.list.push(VideoData::new(season, episode))
     }
 }

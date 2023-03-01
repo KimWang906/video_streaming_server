@@ -9,9 +9,9 @@ use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncSeekExt},
 };
 
-use crate::error::error::ServerError;
+use crate::{error::error::ServerError};
 
-const READ_BYTES: u64 = 1024 * 1024;
+const READ_BYTES: u64 = (1024 * 1024) * 5;
 
 async fn range_handler(req: Request<Body>) -> Option<std::ops::Range<u64>> {
     let range = req.headers()
@@ -53,7 +53,7 @@ async fn response_header<'a>(
     let mut file = File::open(path).await?;
     file.seek(SeekFrom::Start(start)).await?;
     let file = file.take(content_length);
-
+    dbg!(&headers);
     Ok((StatusCode::PARTIAL_CONTENT, headers, Box::pin(file)))
 }
 

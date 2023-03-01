@@ -7,11 +7,9 @@ use axum::{
     response::IntoResponse, 
 };
 use hyper::{Body, Request};
-use serde::{Deserialize, Serialize};
-
 use super::header::header_handler;
 
-#[derive(Serialize, Deserialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct VideoData {
     season: String,
     episode: String,
@@ -34,7 +32,7 @@ impl VideoData {
 }
 
 pub async fn video_handler(Query(id): Query<VideoData>, req: Request<Body>) -> impl IntoResponse {
-    let resource_path = format!("./src/resources/{}-{}.mkv", id.season, id.episode);
+    let resource_path = format!("./src/resources/{}-{}.mp4", id.season, id.episode);
     let file_path = Path::new(&resource_path);
 
     return header_handler(file_path, req).await;

@@ -5,4 +5,5 @@ pub async fn route() -> Router<(), Body> {
     Router::new()
         .route("/list", get(get_list_handler))
         .route("/video", get(video_handler))
+        .route("/view_image/:season/:episode", get(|| async {}))
 }
