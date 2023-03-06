@@ -5,7 +5,8 @@ use axum::{
 use hyper::{Body, StatusCode};
 use std::convert::Infallible;
 use tokio::{fs, io};
-use crate::video::video_list::VideoList;
+
+use super::list::VideoList;
 
 // video file의 path
 pub const PATH: &str = "src/resources";
@@ -21,11 +22,11 @@ pub async fn video_list_handler() -> Result<Json<VideoList>, io::Error> {
         // 4. 변수 셰도잉으로 directory의 이름만 &str로 추출한다.
         let dir_name = dir_entry.file_name();
         let dir_name = dir_name.to_str().unwrap();
-        
-        // 5. 해당 시즌 별 디렉터리 이름은 list.season(Vec) 필드에 저장한다. 
+
+        // 5. 해당 시즌 별 디렉터리 이름은 list.season(Vec) 필드에 저장한다.
         list.seasons.push(dir_name.to_owned());
 
-        // 6. 시즌 별 디렉터리 내에 있는 video 파일을 찾기 위해 Path를 /src/resources/{season}으로 수정한다. 
+        // 6. 시즌 별 디렉터리 내에 있는 video 파일을 찾기 위해 Path를 /src/resources/{season}으로 수정한다.
         let season_path = format!("{}/{}", PATH, dir_name);
         // 7. 시즌 별 디렉터리를 읽어들인다.
         let mut entries = fs::read_dir(season_path).await?;
