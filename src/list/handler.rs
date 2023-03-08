@@ -9,7 +9,7 @@ use tokio::{fs, io};
 use super::list::VideoList;
 
 // video file의 path
-pub const PATH: &str = "src/resources";
+pub const PATH: &str = "src/resources/my_hero_academia";
 
 pub async fn video_list_handler() -> Result<Json<VideoList>, io::Error> {
     // 1. Path의 Directory를 읽어들인다.

@@ -3,8 +3,8 @@ use axum::{Router, routing::get, body::Body};
 use hyper::{Method, header::{CONTENT_TYPE, ACCESS_CONTROL_ALLOW_ORIGIN, RANGE}};
 use tower_http::cors::CorsLayer;
 use crate::{
-    video::{handler::video_handler, preview_image::view_image_handler},
-    list::handler::get_list_handler
+    video::{handler::video_handler},
+    list::handler::get_list_handler, preview_image::preview_image::view_image_handler
 };
     
 pub async fn route() -> Router<(), Body> {
@@ -18,6 +18,6 @@ pub async fn route() -> Router<(), Body> {
     Router::new()
         .route("/list", get(get_list_handler))
         .route("/video", get(video_handler))
-        .route("/preview_image/:info", get(view_image_handler))
+        .route("/preview_image", get(view_image_handler))
         .layer(cors)
 }
