@@ -1,4 +1,11 @@
 /target
 /src/resources
 /src/others
-*.env
+/src/images
+/.env
+/.idea
+debug/
+target/
+Cargo.lock
+**/*.rs.bk
+*.pdb

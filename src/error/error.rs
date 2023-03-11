@@ -5,7 +5,7 @@ pub enum ServerError {
     Database(sqlx::Error),
     Server(axum::Error),
     IoError(io::Error),
-    HttpError(axum::http::Error)
+    HttpError(axum::http::Error),
 }
 
 impl fmt::Display for ServerError {

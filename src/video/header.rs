@@ -4,15 +4,16 @@ use http::{Response, StatusCode};
 use hyper::{Request, Body, HeaderMap};
 use tokio_util::codec::{FramedRead, BytesCodec};
 use std::{fs::metadata, io::{SeekFrom, Error}, path::Path, pin::Pin, convert::Infallible };
+use crate::{error::error::ServerError};
 use tokio::{
     fs::File,
     io::{AsyncRead, AsyncReadExt, AsyncSeekExt},
 };
 
-use crate::error::error::ServerError;
+// 한 청크에 읽어들이는 바이트 수
+const READ_BYTES: u64 = (1024 * 1024) * 5;
 
-const READ_BYTES: u64 = 1024 * 1024;
-
+// 요청을 받은 Body에서 Header 부분의 Range bytes= ...를 추출하여 start와 end를 지정한다.
 async fn range_handler(req: Request<Body>) -> Option<std::ops::Range<u64>> {
     let range = req.headers()
         .get("Range")
@@ -31,30 +32,24 @@ async fn response_header<'a>(
     path: &'a Path,
     range: std::ops::Range<u64>,
 ) -> Result<(StatusCode, HeaderMap, Pin<Box<dyn AsyncRead + Send>>), ServerError> {
-    let f_size = metadata(path)?.len();
-    let start = range.start;
-    let end = std::cmp::min(start + READ_BYTES, f_size - 1);
-    let content_length = end - start + 1;
+    let f_size = metadata(path)?.len(); // 파일 크기
+    let start = range.start; // 파일의 데이터가 시작되는 위치
+    let end = std::cmp::min(start + READ_BYTES, f_size - 1); // 한 청크를 읽었을 때, 파일의 데이터가 끝나는 위치
+    let content_length = end - start + 1; // 실제 청크
 
+    // 반환할 헤더 정보를 담는 변수
     let mut headers = HeaderMap::new();
 
     headers.insert("Accept-Ranges", "bytes".parse().unwrap());
     headers.insert("Content-Type", "video/mp4".parse().unwrap());
 
-    if content_length == f_size {
-        let file = File::open(path).await?;
-        headers.insert("Content-Length", f_size.to_string().parse().unwrap());
-        return Ok((StatusCode::OK, headers, Box::pin(file)));
-    }
-
     headers.insert("Content-Range", format!("bytes {}-{}/{}", start, end, f_size).parse().unwrap());
     headers.insert("Content-Length", content_length.to_string().parse().unwrap());
 
     let mut file = File::open(path).await?;
-    file.seek(SeekFrom::Start(start)).await?;
-    let file = file.take(content_length);
-
-    Ok((StatusCode::PARTIAL_CONTENT, headers, Box::pin(file)))
+    file.seek(SeekFrom::Start(start)).await?; // 파일 포인터를 start까지 옮긴다.
+    let file = file.take(content_length); // start부터 content_length 만큼 데이터를 가진다.
+    Ok((StatusCode::PARTIAL_CONTENT, headers, Box::pin(file))) // Status Code: 403, header info, file을 반환한다.
 }
 
 pub async fn header_handler<'a>(path: &'a Path, req: Request<Body>) -> Result<impl IntoResponse, Infallible> {

@@ -11,7 +11,7 @@ async fn main() -> Result<(), ServerError> {
     //     let body = can_fail().await?;
     //     Ok::<_, reqwest::Error>(Response::new(body))
     //   });
-
+    
     run_service().await;
 
     let conn = connect_db().await?;
