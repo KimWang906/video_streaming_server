@@ -6,7 +6,6 @@ pub enum ServerError {
     Server(axum::Error),
     IoError(io::Error),
     HttpError(axum::http::Error),
-    ImageHandleError(ffmpeg_next::Error),
 }
 
 impl fmt::Display for ServerError {
@@ -36,11 +35,5 @@ impl From<io::Error> for ServerError {
 impl From<axum::http::Error> for ServerError {
     fn from(error: axum::http::Error) -> Self {
         Self::HttpError(error)
-    }
-}
-
-impl From<ffmpeg_next::Error> for ServerError {
-    fn from(error: ffmpeg_next::Error) -> Self {
-        Self::ImageHandleError(error)
     }
 }
