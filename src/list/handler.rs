@@ -5,17 +5,19 @@ use axum::{
 use hyper::{Body, StatusCode};
 use std::convert::Infallible;
 use tokio::{fs, io};
+use std::collections::HashMap;
 
 use super::list::VideoList;
 
 // video file의 path
 pub const PATH: &str = "src/resources/my_hero_academia";
 
-pub async fn video_list_handler() -> Result<Json<VideoList>, io::Error> {
+pub async fn video_list_handler() -> Result<Json<HashMap<String,String>>, io::Error> {
     // 1. Path의 Directory를 읽어들인다.
     let mut entries = fs::read_dir(PATH).await?;
     // 2. 최종적으로 반환할 VideoList를 생성한다.
     let mut list = VideoList::new();
+    let mut animeList: HashMap<String, String> = HashMap::new();
 
     // 3. 디렉터리 내에 있는 시즌 별 디렉터리를 하나씩(dir_entry) 읽어들인다.
     while let Ok(Some(dir_entry)) = entries.next_entry().await {
@@ -39,12 +41,12 @@ pub async fn video_list_handler() -> Result<Json<VideoList>, io::Error> {
             let episode = parse_episode[1].replace(".mp4", "");
 
             // 9. 해당 시즌 내에 존재하는 에피소드를 저장한다.
-            list.push_episode(dir_name, &episode)
+            animeList.insert(&dir_name, &episode);
         }
     }
 
     // 10. Result 형식으로 안전하게 Json(list)를 반환한다.
-    Ok(Json(list))
+    Ok(Json(animeList))
 }
 
 pub async fn get_list_handler() -> Result<impl IntoResponse, Infallible> {
